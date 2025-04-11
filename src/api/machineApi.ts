@@ -82,7 +82,7 @@ class BrowserModbusClient {
 }
 
 // Simula a leitura inicial de dados das máquinas (compatível com navegador)
-export const fetchMachinesData = async (): Promise<Machine[]> {
+export const fetchMachinesData = async (): Promise<Machine[]> => {
   const modbusClient = BrowserModbusClient.getInstance();
   const ips = generateMachineIPs();
   const machines: Machine[] = [];
