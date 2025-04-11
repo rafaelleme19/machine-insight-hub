@@ -1,6 +1,5 @@
 
 import { Machine, MachineDetails, MachineStatus, StatusNameMap } from "@/types";
-import ModbusRTU from "modbus-serial";
 
 // Range de IPs: 172.16.8.110 até 172.16.8.130
 const IP_START = 110;
@@ -17,97 +16,81 @@ const generateMachineIPs = () => {
   return ips;
 };
 
-// Classe para gerenciar conexões Modbus
-class ModbusClient {
-  private static instance: ModbusClient;
-  private clients: Map<string, ModbusRTU> = new Map();
+// Classe simuladora de cliente Modbus para ambiente de navegador
+class BrowserModbusClient {
+  private static instance: BrowserModbusClient;
   private connectionStatus: Map<string, boolean> = new Map();
+  private machineStatuses: Map<string, MachineStatus> = new Map();
 
-  private constructor() {}
-
-  public static getInstance(): ModbusClient {
-    if (!ModbusClient.instance) {
-      ModbusClient.instance = new ModbusClient();
-    }
-    return ModbusClient.instance;
+  private constructor() {
+    // Inicializa com estados aleatórios para simulação
+    const ips = generateMachineIPs();
+    ips.forEach(ip => {
+      this.machineStatuses.set(ip, Math.floor(Math.random() * 4 + 1) as MachineStatus);
+      this.connectionStatus.set(ip, Math.random() > 0.2); // 80% de chance de estar conectado
+    });
   }
 
-  async connect(ip: string): Promise<ModbusRTU> {
-    if (this.clients.has(ip) && this.connectionStatus.get(ip)) {
-      return this.clients.get(ip)!;
+  public static getInstance(): BrowserModbusClient {
+    if (!BrowserModbusClient.instance) {
+      BrowserModbusClient.instance = new BrowserModbusClient();
     }
+    return BrowserModbusClient.instance;
+  }
 
-    try {
-      const client = new ModbusRTU();
-      await client.connectTCP(ip, { port: MODBUS_PORT });
-      client.setID(1);
-      
-      this.clients.set(ip, client);
-      this.connectionStatus.set(ip, true);
-      
-      console.log(`Conectado com sucesso à máquina ${ip}`);
-      return client;
-    } catch (error) {
-      console.error(`Erro ao conectar à máquina ${ip}:`, error);
-      this.connectionStatus.set(ip, false);
-      
-      // Fallback para simular dados se não conseguirmos conectar (para desenvolvimento)
-      const dummyClient = new ModbusRTU();
-      this.clients.set(ip, dummyClient);
-      return dummyClient;
-    }
+  async connect(ip: string): Promise<boolean> {
+    // Simula uma tentativa de conexão com 80% de chance de sucesso
+    const isConnected = Math.random() > 0.2;
+    this.connectionStatus.set(ip, isConnected);
+    
+    console.log(`${isConnected ? 'Conectado' : 'Falha ao conectar'} com a máquina ${ip}`);
+    
+    return isConnected;
   }
 
   async readStatus(ip: string): Promise<MachineStatus> {
-    try {
-      const client = await this.connect(ip);
-      if (!this.connectionStatus.get(ip)) {
-        // Modo simulação se não tiver conexão
-        return (Math.floor(Math.random() * 4) + 1) as MachineStatus;
-      }
-      
-      // Lê o registro que contém o status da máquina
-      const result = await client.readHoldingRegisters(STATUS_REGISTER, 1);
-      const status = result.data[0];
-      
-      // Garante que o status está dentro dos valores permitidos (1-4)
-      return (status >= 1 && status <= 4 ? status : 1) as MachineStatus;
-    } catch (error) {
-      console.error(`Erro ao ler o status da máquina ${ip}:`, error);
-      // Retorna um status aleatório em caso de erro
+    // Verifica se temos uma conexão simulada
+    const isConnected = this.connectionStatus.get(ip) || false;
+    
+    if (!isConnected) {
+      // Se não estiver conectado, gera um status aleatório
       return (Math.floor(Math.random() * 4) + 1) as MachineStatus;
     }
+    
+    // Se estiver "conectado", há uma chance de o status mudar
+    if (Math.random() < 0.3) { // 30% de chance de mudar o status
+      const newStatus = (Math.floor(Math.random() * 4) + 1) as MachineStatus;
+      this.machineStatuses.set(ip, newStatus);
+    }
+    
+    return this.machineStatuses.get(ip) || 1;
   }
 
-  async disconnect(ip: string): Promise<void> {
-    if (this.clients.has(ip)) {
-      try {
-        const client = this.clients.get(ip)!;
-        await client.close();
-        this.connectionStatus.set(ip, false);
-        console.log(`Desconectado da máquina ${ip}`);
-      } catch (error) {
-        console.error(`Erro ao desconectar da máquina ${ip}:`, error);
-      }
+  disconnect(ip: string): void {
+    if (this.connectionStatus.has(ip)) {
+      this.connectionStatus.set(ip, false);
+      console.log(`Desconectado da máquina ${ip}`);
     }
   }
 
-  async disconnectAll(): Promise<void> {
-    for (const ip of this.clients.keys()) {
-      await this.disconnect(ip);
+  disconnectAll(): void {
+    const ips = Array.from(this.connectionStatus.keys());
+    for (const ip of ips) {
+      this.disconnect(ip);
     }
   }
 }
 
-// Simula a leitura inicial de dados das máquinas via Modbus
-export const fetchMachinesData = async (): Promise<Machine[]> => {
-  const modbusClient = ModbusClient.getInstance();
+// Simula a leitura inicial de dados das máquinas (compatível com navegador)
+export const fetchMachinesData = async (): Promise<Machine[]> {
+  const modbusClient = BrowserModbusClient.getInstance();
   const ips = generateMachineIPs();
   const machines: Machine[] = [];
 
   for (let i = 0; i < ips.length; i++) {
     const ip = ips[i];
     try {
+      await modbusClient.connect(ip);
       const status = await modbusClient.readStatus(ip);
       
       machines.push({
@@ -137,8 +120,8 @@ export const fetchMachinesData = async (): Promise<Machine[]> => {
 export const pollMachineUpdates = (
   currentMachines: Machine[],
   callback: (updatedMachines: Machine[]) => void
-) => {
-  const modbusClient = ModbusClient.getInstance();
+): number => {
+  const modbusClient = BrowserModbusClient.getInstance();
   
   const intervalId = setInterval(async () => {
     const updatedMachines = [...currentMachines];
@@ -182,12 +165,13 @@ export const pollMachineUpdates = (
   return intervalId;
 };
 
-// Simula a obtenção de detalhes de uma máquina específica (com alguns dados reais)
+// Simula a obtenção de detalhes de uma máquina específica
 export const fetchMachineDetails = async (machineId: number): Promise<MachineDetails> => {
-  const modbusClient = ModbusClient.getInstance();
+  const modbusClient = BrowserModbusClient.getInstance();
   const ip = `172.16.8.${IP_START + machineId - 1}`;
   
   try {
+    await modbusClient.connect(ip);
     // Lê o status atual via Modbus
     const status = await modbusClient.readStatus(ip);
     
@@ -258,7 +242,7 @@ export const fetchMachineDetails = async (machineId: number): Promise<MachineDet
 };
 
 // Função para limpar todas as conexões ao desmontar a aplicação
-export const cleanupModbusConnections = async (): void => {
-  const modbusClient = ModbusClient.getInstance();
-  await modbusClient.disconnectAll();
+export const cleanupModbusConnections = (): void => {
+  const modbusClient = BrowserModbusClient.getInstance();
+  modbusClient.disconnectAll();
 };
