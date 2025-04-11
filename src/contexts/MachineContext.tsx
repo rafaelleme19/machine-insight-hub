@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { fetchMachinesData, pollMachineUpdates } from "@/api/machineApi";
+import { fetchMachinesData, pollMachineUpdates, cleanupModbusConnections } from "@/api/machineApi";
 import { Machine } from "@/types";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -40,6 +40,11 @@ export const MachineProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     fetchData();
+    
+    // Limpa as conexões Modbus quando o componente é desmontado
+    return () => {
+      cleanupModbusConnections();
+    };
   }, []);
 
   useEffect(() => {
