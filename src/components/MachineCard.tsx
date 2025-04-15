@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,18 +5,17 @@ import { Machine } from "@/types";
 import StatusBadge from "./StatusBadge";
 import { formatTimeFromSeconds, formatDateTime } from "@/utils/formatters";
 import { HardDrive, Clock } from "lucide-react";
-
 interface MachineCardProps {
   machine: Machine;
 }
-
-const MachineCard = ({ machine }: MachineCardProps) => {
-  return (
-    <Link to={`/maquina/${machine.id}`}>
+const MachineCard = ({
+  machine
+}: MachineCardProps) => {
+  return <Link to={`/maquina/${machine.id}`}>
       <Card className="h-full hover:shadow-md transition-shadow">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center">
+            <CardTitle className="text-lg flex items-center font-normal">
               <HardDrive className="h-5 w-5 mr-2 text-muted-foreground" />
               {machine.name}
             </CardTitle>
@@ -61,8 +59,6 @@ const MachineCard = ({ machine }: MachineCardProps) => {
           </p>
         </CardFooter>
       </Card>
-    </Link>
-  );
+    </Link>;
 };
-
 export default MachineCard;
